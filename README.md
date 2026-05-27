@@ -34,10 +34,12 @@ gog auth add you@example.com --services calendar
 ## Usage
 
 ```
+./src/lunch-scheduler.sh <email> [options]
 ./src/lunch-scheduler.sh --account <email> [options]
 
 OPTIONS
-  --account <email>          Google account to use (required)
+  <email>                    Google account to use (required, positional or --account)
+  --account <email>          Google account to use (same as positional)
   --timezone <tz>            IANA timezone name (default: system timezone)
   --calendar <name>          Calendar name or ID (default: primary)
   --start-times <HH:MM,...>  Preferred start times, tried in order
@@ -47,20 +49,20 @@ OPTIONS
   --max-end <HH:MM>          Latest time lunch may end (default: 14:00)
   --window-weeks <n>         Weeks ahead beyond current week to schedule (default: 2)
   --decline-message <msg>    Message sent when declining meetings
-  --dry-run                  Preview only, no changes made
+  --dry-run, -n              Preview only, no changes made
 ```
 
 ### Examples
 
 ```bash
-# Normal run
-./src/lunch-scheduler.sh --account you@example.com
+# Normal run (email as positional)
+./src/lunch-scheduler.sh you@example.com
 
 # Dry run to preview what would be scheduled
-./src/lunch-scheduler.sh --account you@example.com --dry-run
+./src/lunch-scheduler.sh you@example.com -n
 
 # Custom preferences
-./src/lunch-scheduler.sh --account you@example.com \
+./src/lunch-scheduler.sh you@example.com \
   --timezone America/New_York \
   --start-times 12:00,12:30,13:00 \
   --durations 60,30 \
@@ -72,5 +74,5 @@ OPTIONS
 Run at 8 AM every weekday via cron:
 
 ```
-0 8 * * 1-5 /path/to/src/lunch-scheduler.sh --account you@example.com >> /tmp/lunch-scheduler.log 2>&1
+0 8 * * 1-5 /path/to/src/lunch-scheduler.sh you@example.com >> /tmp/lunch-scheduler.log 2>&1
 ```

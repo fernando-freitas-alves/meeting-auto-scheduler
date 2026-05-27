@@ -21,10 +21,12 @@
 #       gog auth add <email> --services calendar
 #
 # USAGE
+#   ./lunch-scheduler.sh <email> [options]
 #   ./lunch-scheduler.sh --account <email> [options]
 #
 # OPTIONS
-#   --account <email>          Google account to use (required)
+#   <email>                    Google account to use (required, positional or --account)
+#   --account <email>          Google account to use (same as positional)
 #   --timezone <tz>            IANA timezone name (default: system timezone)
 #   --calendar <name>          Calendar name or ID (default: primary)
 #   --start-times <HH:MM,...>  Preferred start times, tried in order
@@ -34,12 +36,12 @@
 #   --max-end <HH:MM>          Latest time lunch may end (default: 14:00)
 #   --window-weeks <n>         Weeks ahead beyond current week to schedule (default: 2)
 #   --decline-message <msg>    Message sent when declining meetings (default: "Decline because I'm lunching")
-#   --dry-run                  Preview only — no changes made
+#   --dry-run, -n              Preview only — no changes made
 #   -h, --help                 Show this help
 #
 # AUTOMATION (run at 8 AM every weekday)
 #   crontab -e
-#   Add:  0 8 * * 1-5 /path/to/lunch-scheduler.sh --account you@example.com >> /tmp/lunch-scheduler.log 2>&1
+#   Add:  0 8 * * 1-5 /path/to/lunch-scheduler.sh you@example.com >> /tmp/lunch-scheduler.log 2>&1
 #
 # NOTE ON EVENT TITLE
 #   The --title flag is passed to gog; if your version of gogcli doesn't support
@@ -87,13 +89,15 @@ while [[ $# -gt 0 ]]; do
     --max-end)          MAX_END_STR="$2";    shift 2 ;;
     --window-weeks)     WINDOW_WEEKS="$2";   shift 2 ;;
     --decline-message)  DECLINE_MSG="$2";    shift 2 ;;
-    --dry-run)          DRY_RUN=true;        shift ;;
+    --dry-run|-n)       DRY_RUN=true;         shift ;;
     -h|--help)          usage ;;
-    *) echo "Unknown option: $1" >&2; usage ;;
+    -*) echo "Unknown option: $1" >&2; usage ;;
+    *)  [[ -z "$GOG_ACCOUNT" ]] && GOG_ACCOUNT="$1" || { echo "Unexpected argument: $1" >&2; usage; }
+        shift ;;
   esac
 done
 
-[[ -z "$GOG_ACCOUNT" ]] && { echo "Error: --account is required" >&2; usage; }
+[[ -z "$GOG_ACCOUNT" ]] && { echo "Error: account email is required" >&2; usage; }
 [[ -z "$TZ_NAME" ]] && TZ_NAME=$(detect_system_tz)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
