@@ -105,10 +105,16 @@ to_m() { echo $(( 10#${1%%:*} * 60 + 10#${1##*:} )); }
 # minutes → HH:MM
 fm()   { printf '%02d:%02d' $(( $1 / 60 )) $(( $1 % 60 )); }
 
-# Date helpers — macOS BSD date
-dow()      { date -jf '%Y-%m-%d' "$1" '+%u'; }                   # 1=Mon…7=Sun
-add_days() { date -jf '%Y-%m-%d' -v+${2}d "$1" '+%Y-%m-%d'; }
-sub_days() { date -jf '%Y-%m-%d' -v-${2}d "$1" '+%Y-%m-%d'; }
+# Date helpers — auto-detect BSD (macOS) vs GNU date
+if date -j -f '%Y-%m-%d' '1970-01-01' '+%Y-%m-%d' &>/dev/null; then
+  dow()      { date -jf '%Y-%m-%d' "$1" '+%u'; }
+  add_days() { date -jf '%Y-%m-%d' -v+${2}d "$1" '+%Y-%m-%d'; }
+  sub_days() { date -jf '%Y-%m-%d' -v-${2}d "$1" '+%Y-%m-%d'; }
+else
+  dow()      { date -d "$1" '+%u'; }
+  add_days() { date -d "$1 + $2 days" '+%Y-%m-%d'; }
+  sub_days() { date -d "$1 - $2 days" '+%Y-%m-%d'; }
+fi
 
 # ── Build arrays from comma-separated inputs ──────────────────────────────────
 IFS=',' read -ra _STARTS_HMS <<< "$START_TIMES_RAW"
@@ -171,7 +177,7 @@ JQ
 # ── Process each weekday ──────────────────────────────────────────────────────
 current="$TODAY"
 
-while [[ "$current" <= "$END_DATE" ]]; do
+while [[ ! "$current" > "$END_DATE" ]]; do
 
   DOW_CUR=$(dow "$current")
   if (( DOW_CUR >= 6 )); then
@@ -221,12 +227,12 @@ while [[ "$current" <= "$END_DATE" ]]; do
     ' <<< "$DAY_JSON")
 
     if (( CONFLICTS == 0 )); then
-      log "✓  $current  Lunch $L_START–$L_END — OK, no conflicts"
+      log "✓  $current  Lunch ${L_START}–${L_END} — OK, no conflicts"
       current=$(add_days "$current" 1)
       continue
     fi
 
-    log "⚡ $current  Lunch $L_START–$L_END — conflict detected, rescheduling"
+    log "⚡ $current  Lunch ${L_START}–${L_END} — conflict detected, rescheduling"
     if [[ "$DRY_RUN" == false ]]; then
       gog --account "$GOG_ACCOUNT" calendar delete "$CALENDAR" "$L_ID" --force 2>/dev/null \
         || log "   ⚠  Could not delete $L_ID — will attempt to create anyway"
@@ -270,7 +276,7 @@ while [[ "$current" <= "$END_DATE" ]]; do
 
   # ── Create the Out-of-Office event ─────────────────────────────────────────
   DUR_USED=$(( $(to_m "$BEST_E") - $(to_m "$BEST_S") ))
-  log "✅ $current  Creating Lunch OOO  $BEST_S–$BEST_E  (${DUR_USED} min)"
+  log "✅ $current  Creating Lunch OOO  ${BEST_S}–${BEST_E}  (${DUR_USED} min)"
 
   if [[ "$DRY_RUN" == false ]]; then
     gog --account "$GOG_ACCOUNT" calendar ooo create "$CALENDAR" \

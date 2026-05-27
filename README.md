@@ -23,7 +23,7 @@ Durations tried longest-first (default): `60 → 45 → 30 → 15 minutes` (even
 
 - [`gogcli`](https://github.com/steipete/gogcli) — `brew install steipete/tap/gogcli`
 - `jq` — `brew install jq`
-- macOS (uses BSD `date`)
+- macOS or Linux (`date` — BSD or GNU, auto-detected)
 
 Authenticate once before running:
 
