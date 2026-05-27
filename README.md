@@ -69,6 +69,68 @@ OPTIONS
   --max-end 13:30
 ```
 
+## Example output
+
+```
+[08:00:01] === Lunch Scheduler ===
+[08:00:01] Account:      you@example.com
+[08:00:01] Timezone:     America/New_York
+[08:00:01] Calendar:     primary
+[08:00:01] Window:       2026-05-27 → 2026-06-12  (current week + 2)
+[08:00:01] Start times:  12:30,12:15,12:45,12:00,13:00,13:15,11:45,13:30,11:30
+[08:00:01] Durations:    60,45,30,15 min
+[08:00:01] Max end:      14:00
+[08:00:01] Fetching events from Google Calendar…
+[08:00:02] Fetched 23 events
+[08:00:02] ✓  2026-05-27  Lunch 12:30–13:30 — OK, no conflicts
+[08:00:02] ⚡ 2026-05-28  Lunch 12:30–13:30 — conflict detected, rescheduling
+[08:00:02] ✅ 2026-05-28  Creating Lunch OOO  13:00–14:00  (60 min)
+[08:00:03]    Created ✓
+[08:00:03] ✅ 2026-05-29  Creating Lunch OOO  12:30–13:30  (60 min)
+[08:00:04]    Created ✓
+[08:00:04] ⏭  2026-05-30  PTO/all-day OOO — skipping
+[08:00:04] ❌ 2026-05-31  No lunch slot available (fully booked until 14:00)
+[08:00:04] ✅ 2026-06-02  Creating Lunch OOO  12:15–13:15  (60 min)
+[08:00:05]    Created ✓
+[08:00:05] ⏭  2026-06-03  Already OOO during lunch window — skipping
+[08:00:05] ✅ 2026-06-04  Creating Lunch OOO  12:30–13:00  (30 min)
+[08:00:06]    Created ✓
+[08:00:06] === Done ===
+```
+
+Dry-run output looks the same but all `Creating` lines are prefixed with `[dry-run]` and no calendar changes are made.
+
+## Example output
+
+```
+[08:00:01] === Lunch Scheduler ===
+[08:00:01] Account:      you@example.com
+[08:00:01] Timezone:     America/New_York
+[08:00:01] Calendar:     primary
+[08:00:01] Window:       2026-05-27 → 2026-06-12  (current week + 2)
+[08:00:01] Start times:  12:30,12:15,12:45,12:00,13:00,13:15,11:45,13:30,11:30
+[08:00:01] Durations:    60,45,30,15 min
+[08:00:01] Max end:      14:00
+[08:00:01] Fetching events from Google Calendar…
+[08:00:02] Fetched 23 events
+[08:00:02] ✓  2026-05-27  Lunch 12:30–13:30 — OK, no conflicts
+[08:00:02] ⚡ 2026-05-28  Lunch 12:30–13:30 — conflict detected, rescheduling
+[08:00:02] ✅ 2026-05-28  Creating Lunch OOO  13:00–14:00  (60 min)
+[08:00:03]    Created ✓
+[08:00:03] ✅ 2026-05-29  Creating Lunch OOO  12:30–13:30  (60 min)
+[08:00:04]    Created ✓
+[08:00:04] ⏭  2026-05-30  PTO/all-day OOO — skipping
+[08:00:04] ❌ 2026-05-31  No lunch slot available (fully booked until 14:00)
+[08:00:04] ✅ 2026-06-02  Creating Lunch OOO  12:15–13:15  (60 min)
+[08:00:05]    Created ✓
+[08:00:05] ⏭  2026-06-03  Already OOO during lunch window — skipping
+[08:00:05] ✅ 2026-06-04  Creating Lunch OOO  12:30–13:00  (30 min)
+[08:00:06]    Created ✓
+[08:00:06] === Done ===
+```
+
+Dry-run output looks the same but all `Creating` lines are prefixed with `[dry-run]` and no calendar changes are made.
+
 ## Automation
 
 Use the setup script to install or remove the scheduled job:
