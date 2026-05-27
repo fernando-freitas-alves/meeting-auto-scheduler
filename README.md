@@ -1,7 +1,7 @@
 # meeting-auto-scheduler
 
 <p align="center">
-  <img src="assets/preview.png" alt="Lunch OOO events on Google Calendar" width="80%">
+  <img src="assets/preview.png" alt="Lunch OOO events on Google Calendar">
 </p>
 
 Automatically schedules a daily "Lunch" Out-of-Office block on Google Calendar, working around existing meetings.
