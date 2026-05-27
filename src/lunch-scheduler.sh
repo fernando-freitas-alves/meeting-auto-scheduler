@@ -111,13 +111,15 @@ fm()   { printf '%02d:%02d' $(( $1 / 60 )) $(( $1 % 60 )); }
 
 # Date helpers — auto-detect BSD (macOS) vs GNU date
 if date -j -f '%Y-%m-%d' '1970-01-01' '+%Y-%m-%d' &>/dev/null; then
-  dow()      { date -jf '%Y-%m-%d' "$1" '+%u'; }
-  add_days() { date -jf '%Y-%m-%d' -v+${2}d "$1" '+%Y-%m-%d'; }
-  sub_days() { date -jf '%Y-%m-%d' -v-${2}d "$1" '+%Y-%m-%d'; }
+  dow()        { date -jf '%Y-%m-%d' "$1" '+%u'; }
+  add_days()   { date -jf '%Y-%m-%d' -v+${2}d "$1" '+%Y-%m-%d'; }
+  sub_days()   { date -jf '%Y-%m-%d' -v-${2}d "$1" '+%Y-%m-%d'; }
+  to_rfc3339() { local o; o=$(TZ="$TZ_NAME" date -jf '%Y-%m-%dT%H:%M:%S' "$1" '+%z'); echo "$1${o:0:3}:${o:3:2}"; }
 else
-  dow()      { date -d "$1" '+%u'; }
-  add_days() { date -d "$1 + $2 days" '+%Y-%m-%d'; }
-  sub_days() { date -d "$1 - $2 days" '+%Y-%m-%d'; }
+  dow()        { date -d "$1" '+%u'; }
+  add_days()   { date -d "$1 + $2 days" '+%Y-%m-%d'; }
+  sub_days()   { date -d "$1 - $2 days" '+%Y-%m-%d'; }
+  to_rfc3339() { local o; o=$(TZ="$TZ_NAME" date -d "${1/T/ }" '+%z'); echo "$1${o:0:3}:${o:3:2}"; }
 fi
 
 # ── Build arrays from comma-separated inputs ──────────────────────────────────
@@ -155,7 +157,7 @@ EVENTS_FILE=$(mktemp /tmp/lunch-sched-XXXXXX.json)
 trap 'rm -f "$EVENTS_FILE"' EXIT
 
 RAW=$(gog --account "$GOG_ACCOUNT" calendar events "$CALENDAR" \
-        --from "$TODAY" --to "$END_DATE" --json 2>/dev/null) || RAW='{"events":[]}'
+        --from "$TODAY" --to "$END_DATE" --all-pages --json 2>/dev/null) || RAW='{"events":[]}'
 
 # Handle both {"events":[]} and plain array responses
 echo "$RAW" | jq 'if type=="array" then {events:.} else . end' > "$EVENTS_FILE"
@@ -283,16 +285,16 @@ while [[ ! "$current" > "$END_DATE" ]]; do
   log "✅ $current  Creating Lunch OOO  ${BEST_S}–${BEST_E}  (${DUR_USED} min)"
 
   if [[ "$DRY_RUN" == false ]]; then
-    gog --account "$GOG_ACCOUNT" calendar ooo create "$CALENDAR" \
-        --from "${current}T${BEST_S}:00" \
-        --to   "${current}T${BEST_E}:00" \
-        --title "Lunch" \
+    gog --account "$GOG_ACCOUNT" calendar ooo "$CALENDAR" \
+        --from "$(to_rfc3339 "${current}T${BEST_S}:00")" \
+        --to   "$(to_rfc3339 "${current}T${BEST_E}:00")" \
+        --summary "Lunch" \
+        --auto-decline new \
         --decline-message "$DECLINE_MSG" \
-        --timezone "$TZ_NAME" \
       && log "   Created ✓" \
-      || log "   ⚠  gog returned an error — check flags, try: gog calendar ooo create --help"
+      || log "   ⚠  gog returned an error — check flags, try: gog calendar ooo --help"
   else
-    log "   [dry-run] gog calendar ooo create $CALENDAR --from ${current}T${BEST_S}:00 --to ${current}T${BEST_E}:00"
+    log "   [dry-run] gog calendar ooo $CALENDAR --from ${current}T${BEST_S}:00 --to ${current}T${BEST_E}:00"
   fi
 
   current=$(add_days "$current" 1)
