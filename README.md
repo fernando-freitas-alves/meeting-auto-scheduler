@@ -71,8 +71,24 @@ OPTIONS
 
 ## Automation
 
-Run at 8 AM every weekday via cron:
+Use the setup script to install or remove the scheduled job:
 
+```bash
+# Interactive — prompts for cron or launchd
+./src/setup-schedule.sh you@example.com
+
+# Explicit method
+./src/setup-schedule.sh you@example.com --method launchd
+./src/setup-schedule.sh you@example.com --method cron
+
+# Custom time (default: 08:00)
+./src/setup-schedule.sh you@example.com --hour 9 --minute 30
+
+# Remove
+./src/setup-schedule.sh --method launchd --remove
+./src/setup-schedule.sh --method cron --remove
 ```
-0 8 * * 1-5 /path/to/src/lunch-scheduler.sh you@example.com >> /tmp/lunch-scheduler.log 2>&1
-```
+
+**launchd** (macOS only) — recommended: survives sleep/wake and reboots, fires even if the machine was asleep at the scheduled time.
+
+**cron** — simpler, works on macOS and Linux.
