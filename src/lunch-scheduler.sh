@@ -130,10 +130,12 @@ for hm in "${_STARTS_HMS[@]}"; do
 done
 
 IFS=',' read -ra DURATIONS <<< "$DURATIONS_RAW"
-# trim any spaces
 for i in "${!DURATIONS[@]}"; do DURATIONS[$i]="${DURATIONS[$i]// /}"; done
 
 MAX_END_MIN=$(to_m "$MAX_END_STR")
+
+MIN_LUNCH_S="${PREF_STARTS[0]}"
+for _s in "${PREF_STARTS[@]}"; do (( _s < MIN_LUNCH_S )) && MIN_LUNCH_S=$_s; done
 
 # ── Date range ────────────────────────────────────────────────────────────────
 TODAY=$(date '+%Y-%m-%d')
@@ -193,12 +195,20 @@ while [[ ! "$current" > "$END_DATE" ]]; do
 
   DAY_JSON=$(jq --arg d "$current" \
     '{events: [.events[] | select(
-        .status != "cancelled" and
-        ((.start.dateTime // .start.date) | startswith($d))
+        .status != "cancelled" and (
+          ((.start.dateTime // .start.date) | startswith($d)) or
+          (.start.date != null and .start.date <= $d and .end.date > $d)
+        )
       )]}' "$EVENTS_FILE")
 
   # ── Skip PTO days ──────────────────────────────────────────────────────────
-  PTO_COUNT=$(jq '.events | map(select(.eventType == "outOfOffice" and .start.date != null)) | length' \
+  PTO_COUNT=$(jq --arg d "$current" \
+    '.events | map(select(
+        .eventType == "outOfOffice" and .summary != "Lunch" and (
+          .start.date != null or
+          (.start.dateTime | startswith($d + "T00:00:00"))
+        )
+      )) | length' \
     <<< "$DAY_JSON")
   if (( PTO_COUNT > 0 )); then
     log "⏭  $current  PTO/all-day OOO — skipping"
@@ -275,7 +285,37 @@ while [[ ! "$current" > "$END_DATE" ]]; do
   done
 
   if [[ -z "$BEST_S" ]]; then
-    log "❌ $current  No lunch slot available (fully booked until $MAX_END_STR)"
+    OOO_BLOCK=$(jq \
+      --argjson min_s "$MIN_LUNCH_S" --argjson max_e "$MAX_END_MIN" \
+      '.events | map(select(
+          .eventType == "outOfOffice" and .summary != "Lunch" and .start.dateTime != null
+        ) | {
+          sm: (.start.dateTime | split("T")[1] | split(":") | (.[0]|tonumber)*60 + (.[1]|tonumber)),
+          em: (.end.dateTime   | split("T")[1] | split(":") | (.[0]|tonumber)*60 + (.[1]|tonumber))
+        } | select(.sm < $max_e and .em > $min_s)
+      ) | first // empty' <<< "$DAY_JSON")
+    if [[ -n "$OOO_BLOCK" ]]; then
+      log "⏭  $current  Already OOO during lunch window — skipping"
+    else
+      log "❌ $current  No lunch slot available (fully booked until $MAX_END_STR)"
+    fi
+    current=$(add_days "$current" 1)
+    continue
+  fi
+
+  # Skip if the chosen slot overlaps a non-Lunch OOO (e.g. multi-day timed OOO)
+  BS=$(to_m "$BEST_S"); BE=$(to_m "$BEST_E")
+  OOO_COVER=$(jq \
+    --argjson bs "$BS" --argjson be "$BE" \
+    '.events | map(select(
+        .eventType == "outOfOffice" and .summary != "Lunch" and .start.dateTime != null
+      ) | {
+        sm: (.start.dateTime | split("T")[1] | split(":") | (.[0]|tonumber)*60 + (.[1]|tonumber)),
+        em: (.end.dateTime   | split("T")[1] | split(":") | (.[0]|tonumber)*60 + (.[1]|tonumber))
+      } | select(.sm < $be and .em > $bs)
+    ) | length' <<< "$DAY_JSON")
+  if (( OOO_COVER > 0 )); then
+    log "⏭  $current  Already OOO at ${BEST_S}–${BEST_E} — skipping lunch"
     current=$(add_days "$current" 1)
     continue
   fi
