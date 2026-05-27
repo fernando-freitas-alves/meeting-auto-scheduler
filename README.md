@@ -154,3 +154,5 @@ Use the setup script to install or remove the scheduled job:
 **launchd** (macOS only) — recommended: survives sleep/wake and reboots, fires even if the machine was asleep at the scheduled time.
 
 **cron** — simpler, works on macOS and Linux.
+
+When no `--method` is given, the script prompts interactively. On macOS it defaults to **launchd**; on Linux it skips the prompt and uses **cron** automatically.
