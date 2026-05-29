@@ -134,14 +134,38 @@ When no `--method` is given, the script prompts interactively. On macOS it defau
 
 `src/lunch-scheduler.gs` is a self-contained version that runs entirely inside Google's platform — no terminal, no `gog`, no cron/launchd needed.
 
-**Setup**
+### Deploy via clasp (recommended)
+
+[`clasp`](https://github.com/google/clasp) is Google's CLI for Apps Script and lets you push directly from the repo.
+
+```bash
+# Install clasp and authenticate
+npm install -g @google/clasp
+clasp login
+
+# Create a new Apps Script project (run once)
+cd src
+clasp create --title "lunch-scheduler" --type standalone
+
+# Push the script to Google
+clasp push
+
+# Open the project in the browser to finish setup
+clasp open
+```
+
+### Deploy manually
 
 1. Go to [script.google.com](https://script.google.com) → **New project**
-2. Replace the default code with the contents of `src/lunch-scheduler.gs`
-3. **Services** (+) → search **Google Calendar API** → **Add** (v3 API is required)
-4. Edit the `CONFIG` block at the top of the code if needed (calendar, times, etc.)
-5. Run `setupTrigger()` once — this installs a daily trigger at 06:00
-6. Run `scheduleLunch()` manually to grant permissions and verify it works
+2. Delete the default code, paste the contents of `src/lunch-scheduler.gs`
+3. Save (`Ctrl+S`)
+
+### Finish setup (both methods)
+
+1. **Services** (+) → search **Google Calendar API** → **Add** (v3 is required)
+2. Edit the `CONFIG` block at the top of the code if needed (calendar, times, etc.)
+3. Run `scheduleLunch()` once to grant permissions and verify it works
+4. Run `setupTrigger()` to install the daily trigger
 
 Logs appear in **View → Logs** (or `Ctrl+Enter`). Set `DRY_RUN: true` in `CONFIG` to preview without making changes.
 
