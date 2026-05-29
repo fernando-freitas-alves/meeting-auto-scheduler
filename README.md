@@ -129,3 +129,22 @@ Use the setup script to install or remove the scheduled job:
 **cron** — simpler, works on macOS and Linux.
 
 When no `--method` is given, the script prompts interactively. On macOS it defaults to **launchd**; on Linux it skips the prompt and uses **cron** automatically.
+
+## Google Apps Script (cloud, no local setup)
+
+`src/lunch-scheduler.gs` is a self-contained version that runs entirely inside Google's platform — no terminal, no `gog`, no cron/launchd needed.
+
+**Setup**
+
+1. Go to [script.google.com](https://script.google.com) → **New project**
+2. Replace the default code with the contents of `src/lunch-scheduler.gs`
+3. **Services** (+) → search **Google Calendar API** → **Add** (v3 API is required)
+4. Edit the `CONFIG` block at the top of the code if needed (calendar, times, etc.)
+5. Run `setupTrigger()` once — this installs a daily trigger at 06:00
+6. Run `scheduleLunch()` manually to grant permissions and verify it works
+
+Logs appear in **View → Logs** (or `Ctrl+Enter`). Set `DRY_RUN: true` in `CONFIG` to preview without making changes.
+
+**Remove**
+
+Run `removeTrigger()`, or go to **Triggers** in the left sidebar and delete it manually.
