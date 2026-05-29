@@ -4,9 +4,21 @@
   <img src="assets/preview.png" alt="Lunch OOO events on Google Calendar">
 </p>
 
+A collection of Google Calendar automation scripts to protect your time — block your lunch break, mirror personal appointments to your work calendar, and keep meetings from eating your day.
+
+| Script                          | What it does                                   | Platform           |
+| ------------------------------- | ---------------------------------------------- | ------------------ |
+| `src/lunch-scheduler.sh`        | Schedules a daily Lunch OOO around meetings    | macOS / Linux      |
+| `src/lunch-scheduler.gs`        | Same, runs in the cloud                        | Google Apps Script |
+| `src/personal-calendar-sync.gs` | Mirrors personal calendar events as OOO blocks | Google Apps Script |
+
+---
+
+## Lunch Scheduler
+
 Automatically schedules a daily "Lunch" Out-of-Office block on Google Calendar, working around existing meetings.
 
-## What it does
+### What it does
 
 For every weekday in a rolling window (today through Friday of the current week + `--window-weeks`), the script:
 
@@ -17,13 +29,13 @@ For every weekday in a rolling window (today through Friday of the current week 
 
 "Maybe" and "Declined" RSVP responses are treated as free time and don't block a slot.
 
-## Priority logic
+### Priority logic
 
 Start times tried in order (default): `12:30 → 12:15 → 12:45 → 12:00 → 13:00 → 13:15 → 11:45 → 13:30 → 11:30`
 
 Durations tried longest-first (default): `60 → 45 → 30 → 15 minutes` (event must end by `--max-end`, default `14:00`)
 
-## Requirements
+### Requirements
 
 - [`gogcli`](https://github.com/steipete/gogcli) — `brew install steipete/tap/gogcli`
 - `jq` — `brew install jq`
@@ -35,9 +47,9 @@ Authenticate once before running:
 gog auth add you@example.com --services calendar
 ```
 
-## Usage
+### Usage
 
-```
+```bash
 ./src/lunch-scheduler.sh <email> [options]
 ./src/lunch-scheduler.sh --account <email> [options]
 
@@ -73,9 +85,9 @@ OPTIONS
   --max-end 13:30
 ```
 
-## Example output
+### Example output
 
-```
+```bash
 [08:00:01] === Lunch Scheduler ===
 [08:00:01] Account:      you@example.com
 [08:00:01] Timezone:     America/New_York
@@ -104,7 +116,7 @@ OPTIONS
 
 Dry-run output looks the same but all `Creating` lines are prefixed with `[dry-run]` and no calendar changes are made.
 
-## Automation
+### Automation
 
 Use the setup script to install or remove the scheduled job:
 
@@ -172,3 +184,40 @@ Logs appear in **View → Logs** (or `Ctrl+Enter`). Set `DRY_RUN: true` in `CONF
 **Remove**
 
 Run `removeTrigger()`, or go to **Triggers** in the left sidebar and delete it manually.
+
+## Personal Calendar Sync (Google Apps Script)
+
+`src/personal-calendar-sync.gs` mirrors busy events from a personal Google Calendar into your work calendar as OOO blocks — so personal appointments block your work slots without exposing their details.
+
+**How it works**
+
+- Reads your personal calendar over a rolling window (default: 4 weeks)
+- Creates a `Busy (personal)` OOO block on your work calendar for each busy event
+- On every run: updates time-shifted events, removes mirrors whose source was deleted
+- Skips events you've declined or marked as free
+- Tags each mirror with the source event ID so re-runs stay idempotent
+
+**Setup**
+
+**Step 1 — Share your personal calendar with your work account**
+
+1. Open Google Calendar logged into your **personal** account
+2. Settings (gear icon) → Settings → click your personal calendar in the left sidebar
+3. Click **"Shared with"** → **"+ Add people and groups"**
+4. Add your work email with **"See all event details"** permission and save
+
+**Step 2 — Find your personal calendar ID**
+
+1. Still in personal calendar settings, click **"Integrate calendar"**
+2. Copy the **Calendar ID** (looks like `you@gmail.com` or `abc123@group.calendar.google.com`)
+
+**Step 3 — Configure and deploy**
+
+1. Open `src/personal-calendar-sync.gs` and paste the Calendar ID into `PERSONAL_CALENDAR_ID` in `SYNC_CONFIG`
+2. Deploy alongside `lunch-scheduler.gs` (same Apps Script project or a new one)
+3. Run `syncPersonalCalendar()` once to grant permissions and verify
+4. Run `setupSyncTrigger()` to install an hourly trigger
+
+**Remove**
+
+Run `removeSyncTrigger()` to stop future syncs, then `removeMirroredEvents()` to delete all mirrored events from your work calendar.
