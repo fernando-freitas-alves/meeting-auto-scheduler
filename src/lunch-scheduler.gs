@@ -20,7 +20,7 @@ var CONFIG = {
   START_TIMES: ['12:30', '12:15', '12:45', '12:00', '13:00', '13:15', '11:45', '13:30', '11:30'],
   DURATIONS: [60, 45, 30, 15],   // minutes, tried longest-first
   MAX_END: '14:00',
-  WINDOW_WEEKS: 2,
+  WINDOW_WEEKS: 1,
   DECLINE_MESSAGE: "Decline because I'm lunching",
   TRIGGER_HOUR: 6,
   DRY_RUN: false
@@ -148,17 +148,17 @@ function scheduleLunch() {
 // via UrlFetchApp to enable auto-decline.
 function createOooEvent(date, startHHMM, endHHMM, tz) {
   var created = Calendar.Events.insert({
-    summary:   'Lunch',
-    start:     { dateTime: floatingDt(date, startHHMM, tz), timeZone: tz },
-    end:       { dateTime: floatingDt(date, endHHMM,   tz), timeZone: tz },
+    summary: 'Lunch',
+    start: { dateTime: floatingDt(date, startHHMM, tz), timeZone: tz },
+    end: { dateTime: floatingDt(date, endHHMM, tz), timeZone: tz },
     eventType: 'outOfOffice'
   }, CONFIG.CALENDAR_ID);
 
   // PUT the full event back with autoDeclineMode set — PATCH rejects outOfOfficeProperties
   try {
-    var token  = ScriptApp.getOAuthToken();
-    var calId  = encodeURIComponent(CONFIG.CALENDAR_ID);
-    var url    = 'https://www.googleapis.com/calendar/v3/calendars/' + calId + '/events/' + created.id;
+    var token = ScriptApp.getOAuthToken();
+    var calId = encodeURIComponent(CONFIG.CALENDAR_ID);
+    var url = 'https://www.googleapis.com/calendar/v3/calendars/' + calId + '/events/' + created.id;
     var getResp = UrlFetchApp.fetch(url, {
       headers: { Authorization: 'Bearer ' + token },
       muteHttpExceptions: true
@@ -167,13 +167,13 @@ function createOooEvent(date, startHHMM, endHHMM, tz) {
       var full = JSON.parse(getResp.getContentText());
       full.outOfOfficeProperties = {
         autoDeclineMode: 'declineOnlyNewConflictingInvitations',
-        declineMessage:  CONFIG.DECLINE_MESSAGE
+        declineMessage: CONFIG.DECLINE_MESSAGE
       };
       var putResp = UrlFetchApp.fetch(url, {
-        method:             'put',
-        contentType:        'application/json',
-        headers:            { Authorization: 'Bearer ' + token },
-        payload:            JSON.stringify(full),
+        method: 'put',
+        contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + token },
+        payload: JSON.stringify(full),
         muteHttpExceptions: true
       });
       if (putResp.getResponseCode() >= 400) {
