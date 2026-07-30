@@ -18,7 +18,7 @@
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 var SYNC_CONFIG = {
-  PERSONAL_CALENDAR_ID: 'your.personal@gmail.com', // REQUIRED — set your personal calendar ID
+  PERSONAL_CALENDAR_ID: 'teo.interstei@gmail.com', // REQUIRED — set your personal calendar ID
   WORK_CALENDAR_ID: 'primary',
   WINDOW_WEEKS: 4,          // weeks ahead to sync
   MIRROR_SUMMARY: 'Busy', // title shown on work calendar
