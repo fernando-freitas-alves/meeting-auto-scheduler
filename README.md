@@ -4,12 +4,13 @@
   <img src="assets/preview.png" alt="Lunch OOO events on Google Calendar">
 </p>
 
-A collection of Google Calendar automation scripts to protect your time — block your lunch break, mirror personal appointments to your work calendar, and keep meetings from eating your day.
+A collection of Google Calendar automation scripts to protect your time — block your lunch break, fill free gaps with Focus Time, mirror personal appointments to your work calendar, and keep meetings from eating your day.
 
 | Script                          | What it does                                   | Platform           |
 | ------------------------------- | ---------------------------------------------- | ------------------ |
 | `src/lunch-scheduler.sh`        | Schedules a daily Lunch OOO around meetings    | macOS / Linux      |
 | `src/lunch-scheduler.gs`        | Same, runs in the cloud                        | Google Apps Script |
+| `src/focus-time-scheduler.gs`   | Fills free gaps with Focus Time events         | Google Apps Script |
 | `src/personal-calendar-sync.gs` | Mirrors personal calendar events as OOO blocks | Google Apps Script |
 
 ---
@@ -184,6 +185,46 @@ Logs appear in **View → Logs** (or `Ctrl+Enter`). Set `DRY_RUN: true` in `CONF
 **Remove**
 
 Run `removeTrigger()`, or go to **Triggers** in the left sidebar and delete it manually.
+
+## Focus Time Scheduler (Google Apps Script)
+
+`src/focus-time-scheduler.gs` fills every free gap of at least `MIN_DURATION_MINUTES` inside your configured working hours with a Google Calendar **Focus Time** event. It works around existing meetings, Lunch OOO blocks, and all-day PTO/OOO days.
+
+**How it works**
+
+- Walks each weekday in a rolling window (default: 1 week)
+- Within each `WORK_WINDOWS` slot (default: `09:00–13:00` and `16:00–18:00`), finds free gaps ≥ `MIN_DURATION_MINUTES`
+- Creates Focus Time events (graphite/gray by default) that can auto-decline conflicting invites on a chosen weekday
+- Skips weekends, PTO/all-day OOO days, and events marked free when `IGNORE_FREE_EVENTS` is on
+- Top-level helpers are prefixed with `FT` so this file can live in the same Apps Script project as the lunch scheduler without name collisions
+
+**Setup**
+
+1. Deploy alongside `lunch-scheduler.gs` (same Apps Script project or a new one) — Calendar API v3 advanced service must be enabled
+2. Edit `FT_CONFIG` if needed (windows, duration, color, auto-decline weekday, etc.)
+3. Run `scheduleFocusTime()` once to grant permissions and verify
+4. Install a trigger (pick one or both):
+
+| Trigger | Setup function | When it runs |
+| ------- | -------------- | ------------ |
+| Daily (time-based) | `setupFocusTimeTrigger()` | Once per day at `TRIGGER_HOUR` (default `7`) |
+| Calendar-change | `setupFocusTimeCalendarTrigger()` | Whenever an event is created, updated, or deleted |
+
+**Trigger ordering**
+
+Keep `TRIGGER_HOUR` at least one hour after the Lunch scheduler's hour (default lunch `6`, focus `7`) so lunch blocks already exist and count as busy. Apps Script daily triggers fire at an arbitrary minute within the hour, so a one-hour buffer matters.
+
+**Calendar-change trigger**
+
+`onEventUpdated` does not say *what* changed, so the handler re-runs the full scheduler. A cooldown (`CALENDAR_TRIGGER_COOLDOWN_MINUTES`, default `5`) stored in Script Properties skips rapid repeat runs caused by Focus Time's own writes or multi-change syncs.
+
+You can use the calendar-change trigger alone, alongside the daily trigger, or stick with daily only.
+
+**Remove**
+
+- Daily: `removeFocusTimeTrigger()`
+- Calendar-change: `removeFocusTimeCalendarTrigger()`
+- Or delete either from **Triggers** in the left sidebar
 
 ## Personal Calendar Sync (Google Apps Script)
 
