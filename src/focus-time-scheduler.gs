@@ -134,7 +134,8 @@ function scheduleFocusTime() {
                 var gapStart = cursor;
 
                 if (gapEnd - gapStart >= FT_CONFIG.MIN_DURATION_MINUTES) {
-                    FT_createFocusTimeEvent(dStr, gapStart, gapEnd, tz, autoDecline);
+                    var mergedRange = FT_mergeAdjacentFocusTime(dayEvents, dStr, gapStart, gapEnd);
+                    FT_createFocusTimeEvent(dStr, mergedRange.start, mergedRange.end, tz, autoDecline);
                     created++;
                 }
 
@@ -185,6 +186,67 @@ function FT_createFocusTimeEvent(dStr, startMins, endMins, tz, autoDecline) {
 
     Calendar.Events.insert(event, FT_CONFIG.CALENDAR_ID);
     FT_log('  + Focus Time ' + label);
+}
+
+// -- Adjacent Focus Time merging ---------------------------------------------
+//
+// If a new Focus Time block would sit flush against an existing Focus Time
+// event (created by an earlier run, or manually) - e.g. because a meeting
+// that used to separate them was moved/deleted - merge them into a single
+// continuous block instead of leaving several back-to-back events.
+
+function FT_mergeAdjacentFocusTime(dayEvents, dStr, gapStart, gapEnd) {
+    var mergedStart = gapStart;
+    var mergedEnd = gapEnd;
+
+    var before = FT_findAdjacentFocusTimeEvent(dayEvents, gapStart, 'before');
+    if (before) {
+        mergedStart = FT_eventMins(before).start;
+        FT_removeAdjacentFocusTimeEvent(before, dStr);
+        dayEvents.splice(dayEvents.indexOf(before), 1);
+    }
+
+    var after = FT_findAdjacentFocusTimeEvent(dayEvents, gapEnd, 'after');
+    if (after) {
+        mergedEnd = FT_eventMins(after).end;
+        FT_removeAdjacentFocusTimeEvent(after, dStr);
+        dayEvents.splice(dayEvents.indexOf(after), 1);
+    }
+
+    return { start: mergedStart, end: mergedEnd };
+}
+
+function FT_findAdjacentFocusTimeEvent(dayEvents, boundaryMins, side) {
+    for (var i = 0; i < dayEvents.length; i++) {
+        var e = dayEvents[i];
+        if (e.status === 'cancelled') continue;
+        if (!e.start || !e.start.dateTime || !e.end || !e.end.dateTime) continue;
+        if (e.eventType !== 'focusTime' && e.summary !== FT_CONFIG.EVENT_TITLE) continue;
+
+        var mins = FT_eventMins(e);
+        if (side === 'before' && mins.end === boundaryMins) return e;
+        if (side === 'after' && mins.start === boundaryMins) return e;
+    }
+    return null;
+}
+
+function FT_eventMins(e) {
+    var s = new Date(e.start.dateTime);
+    var en = new Date(e.end.dateTime);
+    return { start: s.getHours() * 60 + s.getMinutes(), end: en.getHours() * 60 + en.getMinutes() };
+}
+
+function FT_removeAdjacentFocusTimeEvent(event, dStr) {
+    var mins = FT_eventMins(event);
+    var label = dStr + ' ' + FT_minsToHHMM(mins.start) + '-' + FT_minsToHHMM(mins.end);
+
+    if (FT_CONFIG.DRY_RUN) {
+        FT_log('  [DRY RUN] would merge & remove adjacent Focus Time ' + label);
+        return;
+    }
+
+    Calendar.Events.remove(FT_CONFIG.CALENDAR_ID, event.id);
+    FT_log('  - merged & removed adjacent Focus Time ' + label);
 }
 
 // -- Busy interval helpers ---------------------------------------------------
