@@ -31,6 +31,11 @@
  *
  * REMOVE
  *   Run removeFocusTimeTrigger(), or Triggers panel -> delete manually.
+ *
+ * CALENDAR-CHANGE TRIGGER (ALTERNATIVE)
+ *   Instead of (or in addition to) the daily trigger, run
+ *   setupFocusTimeCalendarTrigger() once to re-run the scheduler whenever
+ *   anything on the calendar changes. See notes near FT_onCalendarChange().
  */
 
 // -- Configuration -----------------------------------------------------
@@ -48,6 +53,7 @@ var FT_CONFIG = {
     AUTO_DECLINE_WEEKDAY: 5,       // 0=Sun..6=Sat; Friday=5. Use -1 to disable auto-decline entirely.
     DECLINE_MESSAGE: "Declining - this time is reserved for focus work",
     TRIGGER_HOUR: 7,               // keep after Lunch Auto-Scheduler's TRIGGER_HOUR (6)
+    CALENDAR_TRIGGER_COOLDOWN_MINUTES: 5,  // min minutes between runs triggered by calendar-change events
     DRY_RUN: false
 };
 
@@ -308,4 +314,57 @@ function removeFocusTimeTrigger() {
             ScriptApp.deleteTrigger(t);
         }
     });
+}
+
+
+// -- Calendar-change trigger (alternative to the daily time-based trigger) ---
+//
+// onEventUpdated() fires on essentially any create/update/delete on the
+// calendar. It does NOT say what changed, so we just re-run the full
+// scheduler - guarded by a cooldown (FT_CONFIG.CALENDAR_TRIGGER_COOLDOWN_MINUTES)
+// since Focus Time's own writes, and multi-change syncs, could otherwise
+// cause rapid repeat runs.
+//
+// Setup:   run setupFocusTimeCalendarTrigger() once.
+// Remove:  run removeFocusTimeCalendarTrigger(), or delete it from the
+//          Triggers panel manually.
+// You can run this alongside the daily trigger, or use it instead.
+
+function setupFocusTimeCalendarTrigger() {
+    removeFocusTimeCalendarTrigger();
+    var calendarId = FT_resolveCalendarId();
+    ScriptApp.newTrigger('FT_onCalendarChange')
+        .forUserCalendar(calendarId)
+        .onEventUpdated()
+        .create();
+    FT_log('Installed calendar-change trigger on ' + calendarId);
+}
+
+function removeFocusTimeCalendarTrigger() {
+    ScriptApp.getProjectTriggers().forEach(function (t) {
+        if (t.getHandlerFunction() === 'FT_onCalendarChange') {
+            ScriptApp.deleteTrigger(t);
+        }
+    });
+}
+
+function FT_resolveCalendarId() {
+    return FT_CONFIG.CALENDAR_ID === 'primary'
+        ? CalendarApp.getDefaultCalendar().getId()
+        : FT_CONFIG.CALENDAR_ID;
+}
+
+function FT_onCalendarChange(e) {
+    var props = PropertiesService.getScriptProperties();
+    var cooldownMs = (FT_CONFIG.CALENDAR_TRIGGER_COOLDOWN_MINUTES || 5) * 60 * 1000;
+    var last = Number(props.getProperty('FT_LAST_CALENDAR_TRIGGER_RUN') || 0);
+    var now = Date.now();
+    if (now - last < cooldownMs) {
+        FT_log('Calendar-change trigger fired but skipped (cooldown active, ' +
+            Math.round((cooldownMs - (now - last)) / 1000) + 's remaining)');
+        return;
+    }
+    props.setProperty('FT_LAST_CALENDAR_TRIGGER_RUN', String(now));
+    FT_log('Calendar-change trigger fired - running scheduleFocusTime()');
+    scheduleFocusTime();
 }
