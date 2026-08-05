@@ -44,7 +44,7 @@ var FT_CONFIG = {
     EVENT_TITLE: 'Focus Time',
     WORK_WINDOWS: [
         { start: '09:00', end: '13:00' },
-        { start: '16:00', end: '18:00' }
+        { start: '16:00', end: '18:30' }
     ],                             // list of {start,end} windows ("HH:MM") to fill with Focus Time each day
     MIN_DURATION_MINUTES: 15,      // ignore free gaps shorter than this
     WINDOW_WEEKS: 1,               // how far ahead to schedule
