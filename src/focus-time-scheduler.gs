@@ -54,7 +54,8 @@ var FT_CONFIG = {
     DECLINE_MESSAGE: "Declining - this time is reserved for focus work",
     TRIGGER_HOUR: 7,               // keep after Lunch Auto-Scheduler's TRIGGER_HOUR (6)
     CALENDAR_TRIGGER_COOLDOWN_MINUTES: 5,  // min minutes between runs triggered by calendar-change events
-    DRY_RUN: false
+    DRY_RUN: false,
+    REMOVE_CONFLICTING_FOCUS_TIME: true // delete existing Focus Time blocks that overlap an accepted event, so they can be recreated around it
 };
 
 // -- Main ----------------------------------------------------------------
@@ -104,6 +105,11 @@ function scheduleFocusTime() {
             FT_log('skip ' + dStr + ' PTO/all-day OOO - skipping');
             current = FT_addDays(current, 1);
             continue;
+        }
+
+        // -- Delete stale Focus Time blocks that now overlap an accepted event --
+        if (FT_CONFIG.REMOVE_CONFLICTING_FOCUS_TIME) {
+            FT_removeConflictingFocusTime(dayEvents, dStr);
         }
 
         // -- Never schedule in the past for today -------------------------------
@@ -247,6 +253,56 @@ function FT_removeAdjacentFocusTimeEvent(event, dStr) {
 
     Calendar.Events.remove(FT_CONFIG.CALENDAR_ID, event.id);
     FT_log('  - merged & removed adjacent Focus Time ' + label);
+}
+
+// -- Conflict cleanup ---------------------------------------------------
+//
+// If an invite is accepted (or a meeting is added) after Focus Time has
+// already been created over that slot, the existing Focus Time block ends
+// up sitting on top of / overlapping the now-busy meeting. Delete those
+// stale Focus Time blocks so the gap-filling logic below recreates Focus
+// Time around the meeting instead of overlapping it.
+
+function FT_isFocusTimeEvent(e) {
+    if (!e || e.status === 'cancelled') return false;
+    return e.eventType === 'focusTime' || e.summary === FT_CONFIG.EVENT_TITLE;
+}
+
+function FT_isAcceptedBusyEvent(e) {
+    if (!e || e.status === 'cancelled') return false;
+    if (!e.start || !e.start.dateTime || !e.end || !e.end.dateTime) return false; // all-day handled elsewhere
+    if (FT_isFocusTimeEvent(e)) return false; // don't treat our own blocks as real meetings
+    if (FT_CONFIG.IGNORE_FREE_EVENTS && e.transparency === 'transparent') return false;
+    if (e.attendees) {
+        var self = e.attendees.filter(function (a) { return a.self; })[0];
+        if (self && self.responseStatus === 'declined') return false;
+    }
+    return true;
+}
+
+function FT_removeConflictingFocusTime(dayEvents, dStr) {
+    var busyRanges = dayEvents.filter(FT_isAcceptedBusyEvent).map(FT_eventMins);
+
+    for (var i = dayEvents.length - 1; i >= 0; i--) {
+        var e = dayEvents[i];
+        if (!FT_isFocusTimeEvent(e)) continue;
+        if (!e.start || !e.start.dateTime) continue;
+
+        var mins = FT_eventMins(e);
+        var conflicts = busyRanges.some(function (b) {
+            return mins.start < b.end && b.start < mins.end;
+        });
+        if (!conflicts) continue;
+
+        var label = dStr + ' ' + FT_minsToHHMM(mins.start) + '-' + FT_minsToHHMM(mins.end);
+        if (FT_CONFIG.DRY_RUN) {
+            FT_log('  [DRY RUN] would delete Focus Time overlapping accepted event ' + label);
+        } else {
+            Calendar.Events.remove(FT_CONFIG.CALENDAR_ID, e.id);
+            FT_log('  - removed Focus Time overlapping accepted event ' + label);
+        }
+        dayEvents.splice(i, 1);
+    }
 }
 
 // -- Busy interval helpers ---------------------------------------------------
