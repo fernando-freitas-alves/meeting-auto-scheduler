@@ -55,7 +55,7 @@ var FT_CONFIG = {
     TRIGGER_HOUR: 7,               // keep after Lunch Auto-Scheduler's TRIGGER_HOUR (6)
     CALENDAR_TRIGGER_COOLDOWN_MINUTES: 5,  // min minutes between runs triggered by calendar-change events
     DRY_RUN: false,
-    REMOVE_CONFLICTING_FOCUS_TIME: true // delete existing Focus Time blocks that overlap an accepted event, so they can be recreated around it
+    REBUILD_FOCUS_TIME_DAILY: true // clear a day's existing Focus Time first, then rebuild it fresh each run (avoids flush duplicates / stale overlaps)
 };
 
 // -- Main ----------------------------------------------------------------
@@ -107,9 +107,9 @@ function scheduleFocusTime() {
             continue;
         }
 
-        // -- Delete stale Focus Time blocks that now overlap an accepted event --
-        if (FT_CONFIG.REMOVE_CONFLICTING_FOCUS_TIME) {
-            FT_removeConflictingFocusTime(dayEvents, dStr);
+        // -- Rebuild this day's Focus Time from scratch ------------------------
+        if (FT_CONFIG.REBUILD_FOCUS_TIME_DAILY) {
+            FT_clearDayFocusTime(dayEvents, dStr);
         }
 
         // -- Never schedule in the past for today -------------------------------
@@ -140,8 +140,7 @@ function scheduleFocusTime() {
                 var gapStart = cursor;
 
                 if (gapEnd - gapStart >= FT_CONFIG.MIN_DURATION_MINUTES) {
-                    var mergedRange = FT_mergeAdjacentFocusTime(dayEvents, dStr, gapStart, gapEnd);
-                    FT_createFocusTimeEvent(dStr, mergedRange.start, mergedRange.end, tz, autoDecline);
+                    FT_createFocusTimeEvent(dStr, gapStart, gapEnd, tz, autoDecline);
                     created++;
                 }
 
@@ -194,47 +193,7 @@ function FT_createFocusTimeEvent(dStr, startMins, endMins, tz, autoDecline) {
     FT_log('  + Focus Time ' + label);
 }
 
-// -- Adjacent Focus Time merging ---------------------------------------------
-//
-// If a new Focus Time block would sit flush against an existing Focus Time
-// event (created by an earlier run, or manually) - e.g. because a meeting
-// that used to separate them was moved/deleted - merge them into a single
-// continuous block instead of leaving several back-to-back events.
-
-function FT_mergeAdjacentFocusTime(dayEvents, dStr, gapStart, gapEnd) {
-    var mergedStart = gapStart;
-    var mergedEnd = gapEnd;
-
-    var before = FT_findAdjacentFocusTimeEvent(dayEvents, gapStart, 'before');
-    if (before) {
-        mergedStart = FT_eventMins(before).start;
-        FT_removeAdjacentFocusTimeEvent(before, dStr);
-        dayEvents.splice(dayEvents.indexOf(before), 1);
-    }
-
-    var after = FT_findAdjacentFocusTimeEvent(dayEvents, gapEnd, 'after');
-    if (after) {
-        mergedEnd = FT_eventMins(after).end;
-        FT_removeAdjacentFocusTimeEvent(after, dStr);
-        dayEvents.splice(dayEvents.indexOf(after), 1);
-    }
-
-    return { start: mergedStart, end: mergedEnd };
-}
-
-function FT_findAdjacentFocusTimeEvent(dayEvents, boundaryMins, side) {
-    for (var i = 0; i < dayEvents.length; i++) {
-        var e = dayEvents[i];
-        if (e.status === 'cancelled') continue;
-        if (!e.start || !e.start.dateTime || !e.end || !e.end.dateTime) continue;
-        if (e.eventType !== 'focusTime' && e.summary !== FT_CONFIG.EVENT_TITLE) continue;
-
-        var mins = FT_eventMins(e);
-        if (side === 'before' && mins.end === boundaryMins) return e;
-        if (side === 'after' && mins.start === boundaryMins) return e;
-    }
-    return null;
-}
+// -- Focus Time bookkeeping ---------------------------------------------
 
 function FT_eventMins(e) {
     var s = new Date(e.start.dateTime);
@@ -242,64 +201,35 @@ function FT_eventMins(e) {
     return { start: s.getHours() * 60 + s.getMinutes(), end: en.getHours() * 60 + en.getMinutes() };
 }
 
-function FT_removeAdjacentFocusTimeEvent(event, dStr) {
-    var mins = FT_eventMins(event);
-    var label = dStr + ' ' + FT_minsToHHMM(mins.start) + '-' + FT_minsToHHMM(mins.end);
-
-    if (FT_CONFIG.DRY_RUN) {
-        FT_log('  [DRY RUN] would merge & remove adjacent Focus Time ' + label);
-        return;
-    }
-
-    Calendar.Events.remove(FT_CONFIG.CALENDAR_ID, event.id);
-    FT_log('  - merged & removed adjacent Focus Time ' + label);
-}
-
-// -- Conflict cleanup ---------------------------------------------------
-//
-// If an invite is accepted (or a meeting is added) after Focus Time has
-// already been created over that slot, the existing Focus Time block ends
-// up sitting on top of / overlapping the now-busy meeting. Delete those
-// stale Focus Time blocks so the gap-filling logic below recreates Focus
-// Time around the meeting instead of overlapping it.
-
 function FT_isFocusTimeEvent(e) {
     if (!e || e.status === 'cancelled') return false;
     return e.eventType === 'focusTime' || e.summary === FT_CONFIG.EVENT_TITLE;
 }
 
-function FT_isAcceptedBusyEvent(e) {
-    if (!e || e.status === 'cancelled') return false;
-    if (!e.start || !e.start.dateTime || !e.end || !e.end.dateTime) return false; // all-day handled elsewhere
-    if (FT_isFocusTimeEvent(e)) return false; // don't treat our own blocks as real meetings
-    if (FT_CONFIG.IGNORE_FREE_EVENTS && e.transparency === 'transparent') return false;
-    if (e.attendees) {
-        var self = e.attendees.filter(function (a) { return a.self; })[0];
-        if (self && self.responseStatus === 'declined') return false;
-    }
-    return true;
-}
+// -- Daily Focus Time rebuild ---------------------------------------------
+//
+// Rather than trying to incrementally merge a new block into adjacent
+// existing ones, or patch up a block that ended up overlapping a meeting,
+// every run clears out ALL of a day's existing Focus Time blocks first and
+// lets the gap-filling logic above rebuild them from scratch against
+// whatever is currently on the calendar. This guarantees a single
+// contiguous block per free stretch (no flush duplicates that never got
+// merged) and no stale blocks left overlapping a meeting that was
+// added/accepted/moved after Focus Time was originally created.
 
-function FT_removeConflictingFocusTime(dayEvents, dStr) {
-    var busyRanges = dayEvents.filter(FT_isAcceptedBusyEvent).map(FT_eventMins);
-
+function FT_clearDayFocusTime(dayEvents, dStr) {
     for (var i = dayEvents.length - 1; i >= 0; i--) {
         var e = dayEvents[i];
         if (!FT_isFocusTimeEvent(e)) continue;
         if (!e.start || !e.start.dateTime) continue;
 
         var mins = FT_eventMins(e);
-        var conflicts = busyRanges.some(function (b) {
-            return mins.start < b.end && b.start < mins.end;
-        });
-        if (!conflicts) continue;
-
         var label = dStr + ' ' + FT_minsToHHMM(mins.start) + '-' + FT_minsToHHMM(mins.end);
         if (FT_CONFIG.DRY_RUN) {
-            FT_log('  [DRY RUN] would delete Focus Time overlapping accepted event ' + label);
+            FT_log('  [DRY RUN] would clear existing Focus Time ' + label);
         } else {
             Calendar.Events.remove(FT_CONFIG.CALENDAR_ID, e.id);
-            FT_log('  - removed Focus Time overlapping accepted event ' + label);
+            FT_log('  - cleared existing Focus Time ' + label);
         }
         dayEvents.splice(i, 1);
     }
