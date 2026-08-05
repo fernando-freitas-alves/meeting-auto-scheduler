@@ -193,9 +193,10 @@ Run `removeTrigger()`, or go to **Triggers** in the left sidebar and delete it m
 **How it works**
 
 - Walks each weekday in a rolling window (default: 1 week)
-- Within each `WORK_WINDOWS` slot (default: `09:00–13:00` and `16:00–18:00`), finds free gaps ≥ `MIN_DURATION_MINUTES`
+- Within each `WORK_WINDOWS` slot (default: `09:00–13:00` and `16:00–18:30`), finds free gaps ≥ `MIN_DURATION_MINUTES`
 - Creates Focus Time events (graphite/gray by default) that can auto-decline conflicting invites on a chosen weekday
 - Merges flush-adjacent Focus Time blocks into one continuous event when a meeting between them is moved or deleted
+- Deletes existing Focus Time that overlaps an accepted meeting (`REMOVE_CONFLICTING_FOCUS_TIME`) so gaps can be refilled around it
 - Skips weekends, PTO/all-day OOO days, and events marked free when `IGNORE_FREE_EVENTS` is on
 - Top-level helpers are prefixed with `FT` so this file can live in the same Apps Script project as the lunch scheduler without name collisions
 
