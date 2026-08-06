@@ -197,6 +197,7 @@ Run `removeTrigger()`, or go to **Triggers** in the left sidebar and delete it m
 - Uses per-day `WORK_WINDOWS` (map of weekday → `{start,end}` slots; unlisted days use `default`; empty array = skip that day). Defaults: Mon–Thu `09:00–13:00` + `16:00–18:30`, Friday `09:00–18:30`, Sat/Sun off
 - Creates Focus Time events (graphite/gray by default) that can auto-decline conflicting invites on a chosen weekday
 - **Reconciles** instead of wipe-and-rebuild: removes an existing Focus Time block when it overlaps an accepted busy event (even if that block already started); non-conflicting blocks are left alone, then free gaps are refilled from now forward
+- Declined, tentative, and unanswered invites are treated as free (same acceptance rule for reconcile and gap-filling)
 - Tags script-created events with a private `ftManaged` extended property so the calendar-change trigger can ignore its own writes
 - Skips days with no configured work windows, PTO/all-day OOO days, and events marked free when `IGNORE_FREE_EVENTS` is on
 - Top-level helpers are prefixed with `FT` so this file can live in the same Apps Script project as the lunch scheduler without name collisions
