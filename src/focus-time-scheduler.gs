@@ -62,7 +62,7 @@ var FT_CONFIG = {
         sunday: []
     },
     MIN_DURATION_MINUTES: 15,      // ignore free gaps shorter than this
-    WINDOW_WEEKS: 1,               // how far ahead to schedule
+    WINDOW_WEEKS: 1,               // current Mon-Sun week is week 1; each extra week adds the next full Mon-Sun
     COLOR_ID: '8',                 // Graphite/gray - matches manually created Focus Time events
     IGNORE_FREE_EVENTS: true,      // don't count events marked "Free" as busy
     AUTO_DECLINE_WEEKDAY: 5,       // 0=Sun..6=Sat; Friday=5. Use -1 to disable auto-decline entirely.
@@ -107,7 +107,12 @@ function scheduleFocusTime() {
     var today = new Date(now);
     today.setHours(0, 0, 0, 0);
     var todayStr = FT_dateFmt(today);
-    var endDate = FT_addDays(today, FT_CONFIG.WINDOW_WEEKS * 7);
+    // WINDOW_WEEKS counts the *current* (possibly partial) week as week 1,
+    // the next Mon-Sun week as week 2, and so on - it's a count of calendar
+    // weeks, not a flat N*7-day offset from today.
+    var daysSinceMonday = (today.getDay() + 6) % 7; // Monday=0 ... Sunday=6
+    var currentWeekEnd = FT_addDays(today, 6 - daysSinceMonday); // this week's Sunday
+    var endDate = FT_addDays(currentWeekEnd, (FT_CONFIG.WINDOW_WEEKS - 1) * 7);
 
     FT_log('=== Focus Time Scheduler' + (FT_CONFIG.DRY_RUN ? ' [DRY RUN]' : '') + ' ===');
     FT_log('Timezone: ' + tz);
