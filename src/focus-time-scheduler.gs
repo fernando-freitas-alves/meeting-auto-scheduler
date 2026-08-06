@@ -48,10 +48,19 @@
 var FT_CONFIG = {
     CALENDAR_ID: 'primary',
     EVENT_TITLE: 'Focus Time',
-    WORK_WINDOWS: [
-        { start: '09:00', end: '13:00' },
-        { start: '16:00', end: '18:30' }
-    ], // list of {start,end} windows ("HH:MM") to fill with Focus Time each day
+    WORK_WINDOWS: {
+        // Any weekday not listed here falls back to 'default'. Give a day an
+        // empty array to schedule no Focus Time on it at all (e.g. weekends).
+        default: [
+            { start: '09:00', end: '13:00' },
+            { start: '16:00', end: '18:30' }
+        ],
+        friday: [
+            { start: '09:00', end: '18:30' }
+        ],
+        saturday: [],
+        sunday: []
+    },
     MIN_DURATION_MINUTES: 15,      // ignore free gaps shorter than this
     WINDOW_WEEKS: 1,               // how far ahead to schedule
     COLOR_ID: '8',                 // Graphite/gray - matches manually created Focus Time events
@@ -65,6 +74,32 @@ var FT_CONFIG = {
     SELF_REMOVAL_MEMORY_MINUTES: 20 // how long we remember our own deletions for loop detection
 };
 
+// -- Work windows (parametrizable per weekday) ---------------------------
+// FT_CONFIG.WORK_WINDOWS is a map of weekday name -> array of {start,end}
+// "HH:MM" windows for that day. Any weekday not explicitly listed falls
+// back to WORK_WINDOWS.default. A day listed with an empty array gets no
+// Focus Time scheduled at all that day.
+var FT_WEEKDAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+function FT_rawWorkWindowsForDate(date) {
+    var name = FT_WEEKDAY_NAMES[date.getDay()];
+    var cfg = FT_CONFIG.WORK_WINDOWS || {};
+    var raw = cfg.hasOwnProperty(name) ? cfg[name] : (cfg.default || []);
+    return raw || [];
+}
+
+function FT_workWindowsForDate(date) {
+    return FT_rawWorkWindowsForDate(date)
+        .map(function (w) { return { start: FT_toMins(w.start), end: FT_toMins(w.end) }; })
+        .sort(function (a, b) { return a.start - b.start; });
+}
+
+function FT_describeWindows(list) {
+    if (!list || !list.length) return '(none)';
+    return list.map(function (w) { return w.start + '-' + w.end; }).join(', ');
+}
+
+
 // -- Main ----------------------------------------------------------------
 function scheduleFocusTime() {
     var tz = Session.getScriptTimeZone();
@@ -77,7 +112,13 @@ function scheduleFocusTime() {
     FT_log('=== Focus Time Scheduler' + (FT_CONFIG.DRY_RUN ? ' [DRY RUN]' : '') + ' ===');
     FT_log('Timezone: ' + tz);
     FT_log('Calendar: ' + FT_CONFIG.CALENDAR_ID);
-    FT_log('Working hours: ' + FT_CONFIG.WORK_WINDOWS.map(function (w) { return w.start + '-' + w.end; }).join(', '));
+    var workWindowOverrideSummary = Object.keys(FT_CONFIG.WORK_WINDOWS)
+        .filter(function (k) { return k !== 'default'; })
+        .map(function (k) { return k + ': ' + FT_describeWindows(FT_CONFIG.WORK_WINDOWS[k]); })
+        .join(', ');
+    FT_log('Work windows - default: ' + FT_describeWindows(FT_CONFIG.WORK_WINDOWS.default) +
+        (workWindowOverrideSummary ? ' | overrides -> ' + workWindowOverrideSummary : ''));
+
     FT_log('Window: ' + FT_dateFmt(today) + ' -> ' + FT_dateFmt(endDate) + ' (never touching anything before now: ' + now.toISOString() + ')');
 
     // Fetch from *now* forward only - we must never look at, let alone modify,
@@ -86,24 +127,22 @@ function scheduleFocusTime() {
     var allEvents = FT_fetchAllEvents(now.toISOString(), FT_addDays(endDate, 1).toISOString(), tz);
     FT_log('Fetched ' + allEvents.length + ' events');
 
-    var workWindows = FT_CONFIG.WORK_WINDOWS
-        .map(function (w) { return { start: FT_toMins(w.start), end: FT_toMins(w.end) }; })
-        .sort(function (a, b) { return a.start - b.start; });
-    var dayMinMins = workWindows[0].start;
-    var dayMaxMins = workWindows[workWindows.length - 1].end;
-
     // Tracks what *this run* created/removed, so we can tell the loop-guard
     // which future calendar-change notifications are our own doing.
     var touched = { removed: [] };
 
     var current = new Date(today);
     while (current <= endDate) {
-        if (current.getDay() === 0 || current.getDay() === 6) {
+        var dStr = FT_dateFmt(current);
+        var dayWorkWindows = FT_workWindowsForDate(current);
+        if (dayWorkWindows.length === 0) {
+            FT_log('skip ' + dStr + ' (' + FT_WEEKDAY_NAMES[current.getDay()] + ') - no work window configured');
             current = FT_addDays(current, 1);
             continue;
         }
+        var dayMinMins = dayWorkWindows[0].start;
+        var dayMaxMins = dayWorkWindows[dayWorkWindows.length - 1].end;
 
-        var dStr = FT_dateFmt(current);
         var dayEvents = FT_getDayEvents(allEvents, dStr, tz);
 
         // -- Skip PTO / all-day OOO --------------------------------------------
@@ -130,7 +169,7 @@ function scheduleFocusTime() {
         var created = 0;
 
         // -- Walk the gaps within each configured window separately -------------
-        workWindows.forEach(function (win) {
+        dayWorkWindows.forEach(function (win) {
             var winStart = win.start;
             var winEnd = win.end;
             if (nowMins !== null) {
