@@ -164,7 +164,7 @@ function scheduleFocusTime() {
         // currently-accepted busy event, regardless of whether it starts before
         // or after 'now' (a double-booked block isn't valid focus time either
         // way). Blocks that don't conflict with anything are left alone.
-        var removedCount = FT_reconcileDayFocusTime(dayEvents, dStr, nowMins, touched);
+        var removedCount = FT_reconcileDayFocusTime(dayEvents, dStr, touched);
 
         // -- Busy intervals now include real meetings AND any Focus Time blocks
         //    we kept, so the gap-filler below won't duplicate over them.
@@ -291,7 +291,7 @@ function FT_isAccepted(e) {
 // The caller's normal gap-filling pass then naturally recreates Focus Time
 // in whatever free space is left (from now forward), including around the
 // meeting that caused the conflict.
-function FT_reconcileDayFocusTime(dayEvents, dStr, nowMinsBoundary, touched) {
+function FT_reconcileDayFocusTime(dayEvents, dStr, touched) {
     var removed = 0;
 
     // Busy windows contributed by real, accepted, non-Focus-Time events -
@@ -344,6 +344,11 @@ function FT_getBusyIntervals(dayEvents, workStartMins, workEndMins) {
         if (e.status === 'cancelled') return;
         if (!e.start || !e.start.dateTime || !e.end || !e.end.dateTime) return; // skip all-day events here
         if (FT_CONFIG.IGNORE_FREE_EVENTS && e.transparency === 'transparent') return;
+        // Match reconcile: declined / tentative / unanswered invites are not
+        // real commitments, so leave those slots free for Focus Time. Focus
+        // Time blocks themselves (no attendees) still count as busy via
+        // FT_isAccepted returning true when there's no RSVP concept.
+        if (!FT_isAccepted(e)) return;
 
         var s = new Date(e.start.dateTime);
         var en = new Date(e.end.dateTime);
