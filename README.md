@@ -193,7 +193,7 @@ Run `removeTrigger()`, or go to **Triggers** in the left sidebar and delete it m
 **How it works**
 
 - **Creates** Focus Time only **from now forward** — never schedules new blocks in the past (including earlier today)
-- Walks each weekday in a rolling window (default: 1 week)
+- Walks each day in a calendar-week window (`WINDOW_WEEKS`: current Mon–Sun counts as week 1; default `1` = through this Sunday)
 - Uses per-day `WORK_WINDOWS` (map of weekday → `{start,end}` slots; unlisted days use `default`; empty array = skip that day). Defaults: Mon–Thu `09:00–13:00` + `16:00–18:30`, Friday `09:00–18:30`, Sat/Sun off
 - Creates Focus Time events (graphite/gray by default) that can auto-decline conflicting invites on a chosen weekday
 - **Reconciles** instead of wipe-and-rebuild: removes an existing Focus Time block when it overlaps an accepted busy event (even if that block already started); non-conflicting blocks are left alone, then free gaps are refilled from now forward
