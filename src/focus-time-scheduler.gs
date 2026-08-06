@@ -20,14 +20,14 @@
  *      permissions.
  *
  * RECONCILIATION MODEL (not a daily wipe-and-rebuild)
- *   Each run only ever looks at, and only ever touches, the window from the
- *   current moment forward - it never inspects or modifies anything that
- *   already happened, including earlier today.  Within that forward window it:
- *     1. Removes an existing Focus Time block ONLY if it overlaps another,
- *        currently-accepted, busy event (see FT_isAccepted / FT_reconcileDayFocusTime).
- *        Focus Time blocks that don't conflict with anything are left untouched.
- *     2. Re-fills whatever free space remains with fresh Focus Time blocks,
- *        which naturally rebuilds around the meeting that caused a conflict.
+ *   1. Removes an existing Focus Time block ONLY if it overlaps another,
+ *      currently-accepted, busy event (see FT_isAccepted / FT_reconcileDayFocusTime)
+ *      - including blocks that already started before 'now', since a
+ *      double-booked block isn't valid focus time either way. Non-conflicting
+ *      Focus Time blocks are left untouched.
+ *   2. Re-fills free space from 'now' forward with fresh Focus Time blocks
+ *      (never creates new Focus Time in the past), which naturally rebuilds
+ *      around the meeting that caused a conflict.
  *
  * TRIGGER ORDERING
  *   FT_CONFIG.TRIGGER_HOUR defaults to one hour after the Lunch
@@ -116,9 +116,10 @@ function scheduleFocusTime() {
         // -- Never schedule/consider anything before 'now' for today ----------
         var nowMins = (dStr === todayStr) ? (now.getHours() * 60 + now.getMinutes()) : null;
 
-        // -- Reconcile: remove ONLY Focus Time blocks that (a) start now or
-        //    later, AND (b) overlap a currently-accepted busy event. Blocks that
-        //    don't conflict with anything are left completely alone.
+        // -- Reconcile: remove any existing Focus Time block that overlaps a
+        // currently-accepted busy event, regardless of whether it starts before
+        // or after 'now' (a double-booked block isn't valid focus time either
+        // way). Blocks that don't conflict with anything are left alone.
         var removedCount = FT_reconcileDayFocusTime(dayEvents, dStr, nowMins, touched);
 
         // -- Busy intervals now include real meetings AND any Focus Time blocks
@@ -234,14 +235,18 @@ function FT_isAccepted(e) {
 // -- Reconciliation (replaces the old 'clear the whole day, rebuild from
 //    scratch' approach) --------------------------------------------------
 //
-// Removes an existing Focus Time block ONLY when both are true:
-//   1. It overlaps a currently-accepted, busy, non-Focus-Time event.
-//   2. It starts at or after 'nowMinsBoundary' (never touches anything
-//      already in progress or in the past - if nowMinsBoundary is null,
-//      i.e. this is a future day, everything is fair game).
-// Everything else is left completely alone. The caller's normal
-// gap-filling pass then naturally recreates Focus Time in whatever free
-// space is left, including around the meeting that caused the conflict.
+// Removes an existing Focus Time block whenever it overlaps a
+// currently-accepted, busy, non-Focus-Time event - regardless of whether
+// the block itself starts before 'now'. A block that's double-booked with
+// a real meeting isn't valid focus time anyway, so cleaning it up is safe
+// at any time, even if the conflict only appeared because the other event
+// was just edited/moved. (Creating brand-new Focus Time in the past is
+// still never allowed - that stays enforced separately, by the gap-filling
+// pass in scheduleFocusTime never considering time before 'now'.)
+// Everything that doesn't conflict with anything is left completely alone.
+// The caller's normal gap-filling pass then naturally recreates Focus Time
+// in whatever free space is left (from now forward), including around the
+// meeting that caused the conflict.
 function FT_reconcileDayFocusTime(dayEvents, dStr, nowMinsBoundary, touched) {
     var removed = 0;
 
@@ -264,10 +269,9 @@ function FT_reconcileDayFocusTime(dayEvents, dStr, nowMinsBoundary, touched) {
 
         var mins = FT_eventMins(e);
 
-        // Rule: never touch anything that starts before 'now' - including a
-        // block that's already in progress.
-        if (nowMinsBoundary !== null && mins.start < nowMinsBoundary) continue;
-
+        // No 'started in the past' guard here on purpose - see the function doc
+        // comment above. Removing a conflicting block is safe at any time; only
+        // *creating new* Focus Time is restricted to now-forward.
         var overlapsAccepted = conflictIntervals.some(function (iv) {
             return mins.start < iv.end && mins.end > iv.start;
         });
@@ -606,3 +610,5 @@ function FT_recordSelfRemovals(removed) {
     list = list.filter(function (r) { return r.ts >= cutoff; }).concat(removed);
     props.setProperty('FT_RECENT_SELF_REMOVALS', JSON.stringify(list));
 }
+
+
