@@ -192,10 +192,12 @@ Run `removeTrigger()`, or go to **Triggers** in the left sidebar and delete it m
 
 **How it works**
 
+- Only looks at and modifies the calendar **from now forward** — never inspects or changes anything already in the past (including earlier today)
 - Walks each weekday in a rolling window (default: 1 week)
 - Within each `WORK_WINDOWS` slot (default: `09:00–13:00` and `16:00–18:30`), finds free gaps ≥ `MIN_DURATION_MINUTES`
 - Creates Focus Time events (graphite/gray by default) that can auto-decline conflicting invites on a chosen weekday
-- When `REBUILD_FOCUS_TIME_DAILY` is on (default), clears that day's existing Focus Time first and rebuilds it fresh — avoids flush duplicates and stale overlaps
+- **Reconciles** instead of wipe-and-rebuild: removes an existing Focus Time block only when it overlaps an accepted busy event; non-conflicting blocks are left alone, then free gaps are refilled around what's left
+- Tags script-created events with a private `ftManaged` extended property so the calendar-change trigger can ignore its own writes
 - Skips weekends, PTO/all-day OOO days, and events marked free when `IGNORE_FREE_EVENTS` is on
 - Top-level helpers are prefixed with `FT` so this file can live in the same Apps Script project as the lunch scheduler without name collisions
 
@@ -217,7 +219,12 @@ Keep `TRIGGER_HOUR` at least one hour after the Lunch scheduler's hour (default 
 
 **Calendar-change trigger**
 
-`onEventUpdated` does not say *what* changed, so the handler re-runs the full scheduler. A cooldown (`CALENDAR_TRIGGER_COOLDOWN_MINUTES`, default `5`) stored in Script Properties skips rapid repeat runs caused by Focus Time's own writes or multi-change syncs.
+`onEventUpdated` fires on every calendar change, including ones this script just made. To avoid a feedback loop, the handler uses Calendar API incremental sync (`syncToken`) and skips runs when every changed event is self-caused:
+
+- Inserts/updates carrying the `ftManaged` private property
+- Deletes whose IDs were recently recorded in Script Properties (`SELF_REMOVAL_MEMORY_MINUTES`, default `20`)
+
+Only genuine external changes (accepted/declined meetings, moved events, etc.) re-run the scheduler. A cooldown (`CALENDAR_TRIGGER_COOLDOWN_MINUTES`, default `5`) remains as a safety net if sync-token logic fails open.
 
 You can use the calendar-change trigger alone, alongside the daily trigger, or stick with daily only.
 
